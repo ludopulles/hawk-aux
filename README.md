@@ -7,7 +7,7 @@ This repository contains:
 * multiple sage files used in the cryptanalysis and used for generating all the tables in the C implementation,
 * data files that were used to generate all the figures in the paper.
 
-[DPPvW21] **NTRU Fatigue: How Stretched is Overstretched ?**
+[DPPvW21] **HAWK: Module LIP makes Lattice Signatures Fast, Compact and Simple**
 by _Léo Ducas, Eamonn W. Postlethwaite, Ludo Pulles, Wessel van Woerden_
 
 # Contributers
@@ -27,7 +27,7 @@ Short description of the files.
 
 In code:
 
-* BKZ_simulator.sage contains a the code used to simualate BKZ reduction, adapted from the [leaky-LWE-estimator](https://github.com/lducas/leaky-LWE-Estimator)
+* BKZ_simulator.sage contains the code used to simualate BKZ reduction, adapted from the [leaky-LWE-estimator](https://github.com/lducas/leaky-LWE-Estimator)
 * _attack_Zn.sage contains the functions that generate and apply lattice reduction to forms, _attack_Zn.py is created via sage --preparse _attack_Zn.sage and renaming. This preparsing must take place if _attack_Zn.sage is altered
 * attack_Zn.sage contains the high level functions for running experiments in parallel
 * bkz_strat.json contains the strategies used by fpylll for BKZ reduction
