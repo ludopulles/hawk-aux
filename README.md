@@ -1,5 +1,3 @@
-# hawk-aux
-
 # HAWK signature scheme
 This repository contains:
 
@@ -15,15 +13,22 @@ by _Léo Ducas, Eamonn W. Postlethwaite, Ludo Pulles, Wessel van Woerden_
 * Léo Ducas,
 * Eamonn W. Postlethwaite,
 * Ludo Pulles,
-* Wessel van Woerden,
+* Wessel van Woerden.
 
 # Requirements
 
-* C/C++ compiler, preferable `gcc`,
+* C/C++ compiler, preferably `gcc`,
 * [SageMath](https://www.sagemath.org/).
 
 # Description of files
 Short description of the files.
+
+In C-implementation:
+
+* branch `main` (pointed to) contains solely HAWK and a benchmark file located in `tests/speed.c`.
+* branch `develop` contains all the test files that were run to acquire standard deviations of coefficients of either public or signature. These are mostly located in `avx2-optimized/tests`. Here you will also find `config_fg.c` and `config_FG.c` which were used to determine the number of bits needed to represent all the coefficients in every layer of tower solve.
+* branch `NTT-18433` contains an implementation of signing which uses the smaller prime `q = 18433` for signing with the NTT (avx2-optimized stays the same). The advantage of using this smaller prime instead of `65537` is that the memory usage is almost halved for signing.
+* branch `rANS` was an experimental branch for using asymmetric numeral systems as an encoding instead of Golomb--Rice.
 
 In code:
 
