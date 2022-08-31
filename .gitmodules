@@ -1,0 +1,3 @@
+[submodule "C-implementation"]
+	path = C-implementation
+	url = git@github.com:ludopulles/hawk-sign.git
