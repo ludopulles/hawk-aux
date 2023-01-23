@@ -16,8 +16,21 @@ structured = bool(int(argv[6]))
 # 0 for FPyLLL, 1 for g6k
 g6k = bool(int(argv[7]))
 
-# 1 checks that both f, g have odd norm, as in Hawk
+# 0 is no check, 1 checks that both f, g have odd norm, as in Hawk
 hawk = bool(int(argv[8]))
+
+if hawk:
+    resamp = "hawk"
+else:
+    resamp = "none"
+
+# 0 is discrete Gaussian KGen with width param sigma, 1 is binomial with sigma
+binomial = bool(int(argv[9]))
+
+if binomial:
+    dist = "Bin"
+else:
+    dist = "DGauss"
 
 print("n,\t beta,\t prev_sd")
 
@@ -35,19 +48,20 @@ if structured:
                                                                    n,
                                                                    float_type=float_type,  # noqa
                                                                    g6k=g6k,
-                                                                   hawk=hawk)
+                                                                   hawk=hawk,
+                                                                   binomial=binomial) # noqa
 
         data = "%d,%.3f,%.3f,%.3f\n" % (2*n, beta, prev_sd, geo_prev_sd)
         print("%d,\t %.3f,\t %.3f,\t %.3f" % (2*n, beta, prev_sd, geo_prev_sd))
 
         if g6k:
-            filename = "structured-prev_sd-g-{nmin}-{nmax}-{nstep}-{experiments}".format(  # noqa
+            filename = "structured-prev_sd-g-{nmin}-{nmax}-{nstep}-{experiments}-{resamp}-{dist}".format(  # noqa
                         nmin=n_min, nmax=n_max, nstep=n_step,
-                        experiments=experiments)
+                        experiments=experiments, resamp=resamp, dist=dist)
         else:
-            filename = "structured-prev_sd-{nmin}-{nmax}-{nstep}-{experiments}".format(  # noqa
+            filename = "structured-prev_sd-{nmin}-{nmax}-{nstep}-{experiments}-{resamp}-{dist}".format(  # noqa
                         nmin=n_min, nmax=n_max, nstep=n_step,
-                        experiments=experiments)
+                        experiments=experiments, resamp=resamp, dist=dist)
 
         with open("../data/" + filename, "a") as out:
             out.write(data)
@@ -66,19 +80,20 @@ else:
         beta, prev_sd, geo_prev_sd, _ = many_experiment(experiments, processes,
                                                         n,
                                                         float_type=float_type,
-                                                        g6k=g6k)
+                                                        g6k=g6k,
+                                                        binomial=binomial)
 
         data = "%d,%.3f,%.3f,%.3f\n" % (n, beta, prev_sd, geo_prev_sd)
         print("%d,\t %.3f,\t %.3f,\t %.3f" % (n, beta, prev_sd, geo_prev_sd))
 
         if g6k:
-            filename = "prev_sd-g-{nmin}-{nmax}-{nstep}-{experiments}".format(
+            filename = "prev_sd-g-{nmin}-{nmax}-{nstep}-{experiments}-{resamp}-{dist}".format( # noqa
                         nmin=n_min, nmax=n_max, nstep=n_step,
-                        experiments=experiments)
+                        experiments=experiments, resamp=resamp, dist=dist)
         else:
-            filename = "prev_sd-{nmin}-{nmax}-{nstep}-{experiments}".format(
+            filename = "prev_sd-{nmin}-{nmax}-{nstep}-{experiments}-{resamp}-{dist}".format(  # noqa
                         nmin=n_min, nmax=n_max, nstep=n_step,
-                        experiments=experiments)
+                        experiments=experiments, resamp=resamp, dist=dist)
 
         with open("../data/" + filename, "a") as out:
             out.write(data)
