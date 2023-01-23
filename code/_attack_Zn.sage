@@ -13,8 +13,6 @@ from sage.all import load, set_random_seed, randint, matrix, ZZ, RR, \
         block_matrix, sqrt
 from sage.stats.distributions.discrete_gaussian_integer import \
         DiscreteGaussianDistributionIntegerSampler
-from sage.stats.distributions.discrete_gaussian_lattice import \
-        DiscreteGaussianDistributionLatticeSampler
 from sage.matrix.matrix_integer_dense_hnf import hnf_with_transformation
 
 from hawk import SignatureScheme
@@ -28,6 +26,18 @@ def general_circulant(f):
     z = K([0, 1])
     M = matrix(ZZ, [[(z**j * f)[i] for i in range(deg)] for j in range(deg)])
     return M
+
+
+class binomialD:
+    def __init__(dist, sigma):
+        # for binomial distributions a la Kyber etc, sigma must be an integer
+        # note it is not standard deviation, instead variance is sigma / 2
+        assert sigma.is_integer()
+        dist.sigma = sigma
+
+    def __call__(dist):
+        bits = [randint(0, 1) for _ in range(2*dist.sigma)]
+        return sum([bits[i]-bits[i+1] for i in range(0, 2*dist.sigma, 2)])
 
 
 def one_check(b_one, b, red_object, g6k=False):
@@ -46,25 +56,17 @@ def one_check(b_one, b, red_object, g6k=False):
     return b_one
 
 
-def generate_U_DvW(n, sigma, B=None):
+def generate_U_DvW(n, sigma, binomial=False):
     # If B is not None sample according to D_{Q, sigma}
 
-    if B is None:
-        D = DiscreteGaussianDistributionIntegerSampler(sigma=sigma)
+    if binomial:
+        D = binomialD(sigma)
     else:
-        if abs(B.determinant()) != 1:
-            print("Determinant of basis is {det}".format(det=B.determinant()))
-            raise NotImplementedError
-        D = DiscreteGaussianDistributionLatticeSampler(ZZ**n, sigma=sigma)
-        Binv = matrix(ZZ, B.inverse())
+        D = DiscreteGaussianDistributionIntegerSampler(sigma=sigma)
 
     while True:
-        if B is None:
-            # Sample a linearly set of vectors in Z^n
-            Y = matrix(ZZ, [[D() for _ in range(n)] for _ in range(n)])
-        else:
-            # sample according to D_{Q, s} by sampling from ZZ^n and * B^-1
-            Y = matrix(ZZ, [D() * Binv for _ in range(n)])
+        # Sample a linearly set of vectors in Z^n
+        Y = matrix(ZZ, [[D() for _ in range(n)] for _ in range(n)])
         if Y.determinant():
             break
 
@@ -119,8 +121,6 @@ def solve_instance(red_object, tours, g6k=False):
 
         b_one = one_check(b_one, b, red_object, g6k=g6k)
 
-        b = 4
-
         while b_one is None:
             prevnorm = get_prevnorm(red_object, g6k)
             b += 1
@@ -134,6 +134,7 @@ def solve_instance(red_object, tours, g6k=False):
             profiles[b] = get_profile(red_object, g6k)
 
     else:
+
         lll = LLL.Reduction(red_object)
         lll()
 
@@ -160,16 +161,16 @@ def solve_instance(red_object, tours, g6k=False):
 
 
 def one_experiment_structured(params):
-    n, seed, sigma, tours, dual, randomise, float_type, g6k, hawk = params # noqa
+    n, seed, sigma, tours, dual, float_type, g6k, hawk, binomial = params # noqa
 
-    if g6k and (dual or randomise):
-        print("g6k with randomisation or dual currently not implemented")
+    if g6k and dual:
+        print("g6k with dual currently not implemented")
         return
 
     set_random_seed(randint(0, 2**31) + seed)
 
     # sigma_sig and sigma_ver do not come into the below, so just set as equal
-    sig = SignatureScheme(n, sigma, sigma, sigma)
+    sig = SignatureScheme(n, sigma, sigma, sigma, binomial=binomial)
     sk, pk = sig.KGen(hawk=hawk)
 
     q00 = pk[0]
@@ -193,16 +194,9 @@ def one_experiment_structured(params):
 
     assert B * B.transpose() == Q, "wrong form"
 
-    deg = q00.parent().degree()
-
     if dual:
         Q = matrix(ZZ, Q.inverse())
         assert abs(Q.determinant()) == 1, "dual det Q=" + str(Q.determinant())
-
-    if randomise:
-        V = generate_U_DvW(2 * deg, sigma, B=B)
-        assert abs(V.determinant()) == 1
-        Q = V * Q * V.transpose()
 
     assert abs(Q.determinant()) == 1, 'detQ =' + str(Q.determinant())
     Q = IntegerMatrix.from_matrix(Q)
@@ -231,20 +225,16 @@ def one_experiment_structured(params):
 def one_experiment(params):
     # from fpylll import FPLLL
     # FPLLL.set_threads(8)
-    n, seed, sigma, tours, dual, randomise, float_type, g6k = params
+    n, seed, sigma, tours, dual, float_type, g6k, binomial = params
 
-    if g6k and (dual or randomise):
-        print("g6k with randomisation or dual currently not implemented")
+    if g6k and dual:
+        print("g6k with dual currently not implemented")
         return
 
     set_random_seed(randint(0, 2**31) + seed)
 
-    U = generate_U_DvW(n, sigma)
+    U = generate_U_DvW(n, sigma, binomial=binomial)
     Q = U * U.transpose()
-
-    if randomise:
-        V = generate_U_DvW(n, sigma, B=U)
-        Q = V * Q * V.transpose()
 
     if dual:
         Q = matrix(ZZ, Q.inverse())

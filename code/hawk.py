@@ -4,9 +4,12 @@
 from sage.all_cmdline import *   # import sage library
 
 _sage_const_2 = Integer(2); _sage_const_1 = Integer(1); _sage_const_0 = Integer(0); _sage_const_32 = Integer(32); _sage_const_1p5 = RealNumber('1.5'); _sage_const_1p1 = RealNumber('1.1')
-from sage.all import CyclotomicField, identity_matrix, is_even, log,         randint, xgcd
-from sage.stats.distributions.discrete_gaussian_integer import         DiscreteGaussianDistributionIntegerSampler as DGaussZ
-from sage.stats.distributions.discrete_gaussian_lattice import         DiscreteGaussianDistributionLatticeSampler as DGauss
+from sage.all import CyclotomicField, identity_matrix, is_even, log, \
+        randint, xgcd
+from sage.stats.distributions.discrete_gaussian_integer import \
+        DiscreteGaussianDistributionIntegerSampler as DGaussZ
+from sage.stats.distributions.discrete_gaussian_lattice import \
+        DiscreteGaussianDistributionLatticeSampler as DGauss
 
 
 class NotCoprimeError(Exception):
@@ -170,8 +173,20 @@ class CyclotomicTower:
         return F - rounded_k * f, G - rounded_k * g
 
 
+class binomialD:
+    def __init__(dist, sigma):
+        # for binomial distributions a la Kyber etc, sigma must be an integer
+        # note it is not standard deviation, instead variance is sigma / 2
+        assert sigma.is_integer()
+        dist.sigma = sigma
+
+    def __call__(dist):
+        bits = [randint(_sage_const_0 , _sage_const_1 ) for _ in range(_sage_const_2 *dist.sigma)]
+        return sum([bits[i]-bits[i+_sage_const_1 ] for i in range(_sage_const_0 , _sage_const_2 *dist.sigma, _sage_const_2 )])
+
+
 class SignatureScheme:
-    def __init__(self, n, sigma_kg, sigma_sig, sigma_ver):
+    def __init__(self, n, sigma_kg, sigma_sig, sigma_ver, binomial=False):
         """
         Initialise the signature scheme over power of two degree n cyclotomics
         with the various sigma. In particular initialise the discrete Gaussian
@@ -183,6 +198,9 @@ class SignatureScheme:
         :param sigma_sig:   the Gaussian parameter used in signing
         :param sigma_ver:   the Gaussian parameter determining valid signatures
 
+        :param binomial:    a boolean that if ``True`` uses a binomial
+                                distribution defined in Kyber
+
         ..note::      to keep the code simpler we do not half h as in HAWK
                       proper, so we work in cosets 2 ZZ^(2n) + c with
                       c in ZZ^(2n).
@@ -192,7 +210,10 @@ class SignatureScheme:
         """
         self.n = n
         # sampler for KGen
-        self.D0_kg = DGaussZ(sigma=sigma_kg)
+        if binomial:
+            self.D0_kg = binomialD(sigma_kg)
+        else:
+            self.D0_kg = DGaussZ(sigma=sigma_kg)
         # two coset samplers for Sign, using 2*sigma_sig as over 2 ZZ^(2n)
         self.D0_sig = DGauss(_sage_const_2 *identity_matrix(_sage_const_1 ), sigma=_sage_const_2 *sigma_sig)
         self.D1_sig = DGauss(_sage_const_2 *identity_matrix(_sage_const_1 ), sigma=_sage_const_2 *sigma_sig, c=(_sage_const_1 ,))

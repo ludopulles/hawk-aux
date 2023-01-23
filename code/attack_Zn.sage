@@ -19,8 +19,8 @@ import os
 
 
 def many_experiment(experiments, processes, n, sigma=20, tours=1, dual=False,
-                    randomise=False, float_type="double", g6k=False):
-    jobs = [(n, seed, sigma, tours, dual, randomise, float_type, g6k) for seed in range(experiments)] # noqa
+                    float_type="double", g6k=False, binomial=False):
+    jobs = [(n, seed, sigma, tours, dual, float_type, g6k, binomial) for seed in range(experiments)] # noqa
     with Pool(processes) as p:
         res = p.map(one_experiment, jobs)
     res = [x for x in res if x is not None]
@@ -34,9 +34,9 @@ def many_experiment(experiments, processes, n, sigma=20, tours=1, dual=False,
 
 
 def many_experiment_structured(experiments, processes, n, sigma=20, tours=1,
-                               dual=False, randomise=False,
-                               float_type="double", g6k=False, hawk=True):
-    jobs = [(n, seed, sigma, tours, dual, randomise, float_type, g6k, hawk) for seed in range(experiments)] # noqa
+                               dual=False, float_type="double", g6k=False,
+                               hawk=True, binomial=False):
+    jobs = [(n, seed, sigma, tours, dual, float_type, g6k, hawk, binomial) for seed in range(experiments)] # noqa
     with Pool(processes) as p:
         res = p.map(one_experiment_structured, jobs)
     res = [x for x in res if x is not None]
