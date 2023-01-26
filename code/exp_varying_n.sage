@@ -1,6 +1,9 @@
 from sage.all import load
 from sys import argv
 
+import warnings
+warnings.filterwarnings("ignore")
+
 load("attack_Zn.sage")
 
 experiments = int(argv[1])
@@ -29,8 +32,11 @@ binomial = bool(int(argv[9]))
 
 if binomial:
     dist = "Bin"
+    sigma = 2*10.
 else:
     dist = "DGauss"
+    sigma = sqrt(10.)
+
 
 print("n,\t beta,\t prev_sd")
 
@@ -46,6 +52,7 @@ if structured:
         beta, prev_sd, geo_prev_sd, _ = many_experiment_structured(experiments,
                                                                    processes,
                                                                    n,
+                                                                   sigma=sigma,
                                                                    float_type=float_type,  # noqa
                                                                    g6k=g6k,
                                                                    hawk=hawk,
@@ -79,6 +86,7 @@ else:
             float_type = "qd"
         beta, prev_sd, geo_prev_sd, _ = many_experiment(experiments, processes,
                                                         n,
+                                                        sigma=sigma,
                                                         float_type=float_type,
                                                         g6k=g6k,
                                                         binomial=binomial)

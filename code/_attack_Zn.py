@@ -9,16 +9,14 @@ from fpylll.algorithms.bkz2 import BKZReduction as BKZ2
 from fpylll.tools.bkz_stats import dummy_tracer
 
 try:
-    from g6k.algorithms.bkz import naive_bkz_tour
-    from g6k.siever import Siever
+    from g6k.algorithms.bkz import pump_n_jump_bkz_tour
+    from g6k import Siever, SieverParams
     from g6k.utils.stats import dummy_tracer as g6k_dummy_tracer
 except ModuleNotFoundError:
     pass
 
-from sage.all import load, set_random_seed, randint, matrix, ZZ, RR, \
-        block_matrix, sqrt
-from sage.stats.distributions.discrete_gaussian_integer import \
-        DiscreteGaussianDistributionIntegerSampler
+from sage.all import load, set_random_seed, randint, matrix, ZZ, RR,         block_matrix, sqrt
+from sage.stats.distributions.discrete_gaussian_integer import         DiscreteGaussianDistributionIntegerSampler
 from sage.matrix.matrix_integer_dense_hnf import hnf_with_transformation
 
 from hawk import SignatureScheme
@@ -131,8 +129,7 @@ def solve_instance(red_object, tours, g6k=False):
             prevnorm = get_prevnorm(red_object, g6k)
             b += _sage_const_1 
             for _ in range(tours):
-                naive_bkz_tour(red_object, g6k_dummy_tracer, b,
-                               dim4free_fun=no_d4f)
+                pump_n_jump_bkz_tour(red_object, g6k_dummy_tracer, b, jump=_sage_const_1 )
             red_object.lll(_sage_const_0 , dim)
 
             b_one = one_check(b_one, b, red_object, g6k=g6k)
@@ -219,7 +216,8 @@ def one_experiment_structured(params):
     gso.update_gso()
 
     if g6k:
-        reduction_object = Siever(gso)
+        params = SieverParams(threads=_sage_const_1 )
+        reduction_object = Siever(gso, params)
     else:
         reduction_object = gso
 
@@ -268,7 +266,8 @@ def one_experiment(params):
     gso.update_gso()
 
     if g6k:
-        reduction_object = Siever(gso)
+        params = SieverParams(threads=_sage_const_1 )
+        reduction_object = Siever(gso, params)
     else:
         reduction_object = gso
 
