@@ -54,7 +54,6 @@ def tower_solve_fraction(CT, sigma=1.5, repeats=1000, hawk=False,
     tower_solvable_samples = 0
     tower_failing_gcds = {}
     for _ in range(repeats):
-        print(_)
         f, g, attempts = sample_fg(CT, sigma=sigma, check_coprime=False,
                                    check_completable=True, count=True,
                                    hawk=hawk, binomial=binomial)
