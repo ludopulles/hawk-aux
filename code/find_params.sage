@@ -15,8 +15,8 @@ def slog(x, base):
     :returns:       either log(x, base) or -inf
 
     .. note::       -Infinity here is really some approximation of how strictly
-                        cutoff is set in clean_dist of proba_utils -- in the
-                        paper we rather arbitrarily set -Infinity as -300
+                    cutoff is set in clean_dist of proba_utils -- in the paper
+                    we rather arbitrarily set -Infinity as -300
     """
     if x > 0.0:
         return log(x, base)
@@ -30,7 +30,7 @@ def rhf(beta):
     :param beta:    an integer blocksize for BKZ
     :returns:       the root Hermite factor as a float
     """
-    assert beta >= 50 and beta.is_integer(), "beta must be an int >= 50"
+    assert beta >= 50, "beta must be an int >= 50"
 
     return float(((beta/(2.*pi*e))*(pi*beta)**(1./beta))**(1/(2.*(beta-1))))
 
@@ -46,6 +46,10 @@ def log_gsa_lens(d, beta, vol=1, first=True):
     :param first:   a bool that if set means only the first Gram--Schmidt
                         length is returned
     :returns:       a list of log lengths for the Gram--Schmidt basis vectors
+
+    ..note::        the root Hermite factor + GSA model for the lengths of
+                    Gram--Schmidt vectors gives the same as [MW16, Cor 2] that
+                    is commonly used elsewhere
     """
     assert d.is_integer() and d > 0, "the dimension must be a positive int"
     assert beta <= d, "require beta <= d"
@@ -54,8 +58,8 @@ def log_gsa_lens(d, beta, vol=1, first=True):
 
     rhf_beta = rhf(beta)
     if first:
-        return [(d - 1.)*log(rhf_beta) + (1./d) * vol]
-    return [(d - 2.*i - 1.)*log(rhf_beta) + (1./d) * vol for i in range(d)]
+        return [(d - 1.)*log(rhf_beta) + (1./d) * log(vol)]
+    return [(d-2.*i-1.)*log(rhf_beta) + (1./d) * log(vol) for i in range(d)]
 
 
 def approx_SVP_beta(d, sver, simulate=True):
@@ -82,6 +86,43 @@ def approx_SVP_beta(d, sver, simulate=True):
         log_first_sqr = 2. * log_gsa_lens(d, beta)[0]
         if success_beta is None and log_first_sqr <= log_sqr_ver_bound:
             return beta
+
+
+def keyRecoveryADPSstyle(d, k_fac=False):
+    """
+    Following the ADPS methodology, i.e. without simulation using the leaky-LWE
+    estimator.
+
+    :param d:       an integer dimension
+    :param k_fac:   include a multiplicative factor of (4/3)**.5 in rhs
+    :returns:       a blocksize ``beta``
+    """
+    for beta in range(50, d):
+        lhs = (beta / d)**.5
+        rhs = rhf(beta)**(2*beta-d+1)
+        if k_fac:
+            rhs *= (4./3.)**.5
+        if lhs <= rhs:
+            return beta
+
+
+def findStandardDeviation(d, k_fac=False, simulate=False):
+    """
+    An attempt to find the standard deviation at which dimension d instances
+    exhibit maximum hardness, based on the idea that if ||(f, g)|| is longer
+    than the first basis we expect after lattice reduction by successful beta,
+    then we are in the regime where our lattice reduction heuristics hold
+
+    :param d:           an integer dimension
+    :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
+    :param simulate:    if ``False`` use ADPS methodology, else leaky-LWE
+    :returns:           a standard deviation (not Gaussian width) sigma
+    """
+    if simulate:
+        beta, _ = key_recovery_beta_ssec(d)
+    else:
+        beta = keyRecoveryADPSstyle(d, k_fac=k_fac)
+    return rhf(beta)**(d-1.)/d**.5
 
 
 def key_recovery_beta_ssec(d):
@@ -158,8 +199,8 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
             entries[1.] = len_sqr
             entries[0.] = d - entries[1.]
         else:
-            assert(len_sqr >= d)
-            assert(len_sqr <= d*entry_upper_bound**2)
+            assert (len_sqr >= d)
+            assert (len_sqr <= d*entry_upper_bound**2)
 
             upp = entry_upper_bound
             # solve: d_(upp-1)+d_upp=d
@@ -168,9 +209,9 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
             dupp = floor((len_sqr - d*(upp-1)**2)/(2*upp-1))
             dupp1 = d - dupp
 
-            assert(dupp+dupp1 == d)
-            assert(dupp1*(upp-1)**2+dupp*upp**2 <= len_sqr)
-            assert(dupp1*(upp-1)**2+dupp*upp**2 > len_sqr-upp**2)
+            assert (dupp+dupp1 == d)
+            assert (dupp1*(upp-1)**2+dupp*upp**2 <= len_sqr)
+            assert (dupp1*(upp-1)**2+dupp*upp**2 > len_sqr-upp**2)
 
             entries[upp-1] = dupp1
             entries[upp] = dupp
@@ -237,7 +278,8 @@ def falcon_blocksizes(d, falcon=False, k_fac=True):
                         ``beta_forge`` for strong signature forgery
 
     .. note::       in the Falcon key recovery methodology they apply both
-                        k_fac and dimensions for free techniques
+                    k_fac and dimensions for free techniques, as decscribed in
+                    App D
     """
     assert d == 1024 or d == 2048, "please choose a Falcon/Hawk d"
     assert isinstance(falcon, bool), "falcon must be a bool"
