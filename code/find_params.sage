@@ -1,5 +1,5 @@
 from sage.all import ceil, e, floor, Infinity, IntegerRange, load, log, pi, \
-        RR, sqrt
+        RR, sqrt, var, find_fit, model, show
 from proba_utils import centered_discrete_Gaussian_law, law_square, \
         law_convolution, iter_law_convolution, pos_head_probability, \
         tail_probability
@@ -30,8 +30,24 @@ def rhf(beta):
     :param beta:    an integer blocksize for BKZ
     :returns:       the root Hermite factor as a float
     """
-    assert beta >= 50, "beta must be an int >= 50"
+    small = (( 2, 1.02190),  # noqa
+             ( 5, 1.01862),  # noqa
+             (10, 1.01616),
+             (15, 1.01485),
+             (20, 1.01420),
+             (25, 1.01342),
+             (28, 1.01331),
+             (40, 1.01295))
 
+    beta = float(beta)
+    if beta <= 2:
+        return (1.0219)
+    elif beta < 40:
+        for i in range(1, len(small)):
+            if small[i][0] > beta:
+                return (small[i-1][1])
+    elif beta == 40:
+        return (small[-1][1])
     return float(((beta/(2.*pi*e))*(pi*beta)**(1./beta))**(1/(2.*(beta-1))))
 
 
@@ -97,7 +113,7 @@ def keyRecoveryADPSstyle(d, k_fac=False):
     :param k_fac:   include a multiplicative factor of (4/3)**.5 in rhs
     :returns:       a blocksize ``beta``
     """
-    for beta in range(50, d):
+    for beta in [2, 5, 10, 15, 20, 25, 28, 40] + list(range(41, d)):
         lhs = (beta / d)**.5
         rhs = rhf(beta)**(2*beta-d+1)
         if k_fac:
@@ -116,16 +132,17 @@ def findStandardDeviation(d, k_fac=False, simulate=False):
     :param d:           an integer dimension
     :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
     :param simulate:    if ``False`` use ADPS methodology, else leaky-LWE
-    :returns:           a standard deviation (not Gaussian width) sigma
+    :returns:           a standard deviation (not Gaussian width) sigma and the
+                        beta we expect to represent maximum hardness
     """
     if simulate:
         beta, _ = key_recovery_beta_ssec(d)
     else:
         beta = keyRecoveryADPSstyle(d, k_fac=k_fac)
-    return rhf(beta)**(d-1.)/d**.5
+    return beta, rhf(beta)**(d-1.)/d**.5
 
 
-def key_recovery_beta_ssec(d):
+def key_recovery_beta_ssec(d, simulate=True):
     """
     Use the leaky-LWE-estimator to determine the expected successful blocksize
     that recovers a lattice vector of length one from some basis of ZZ^d, along
@@ -137,12 +154,60 @@ def key_recovery_beta_ssec(d):
                         recovery, and ``prev_sd``the estimates the length of
                         the previous shortest vector
     """
-    beta, prev_sd = predict_beta_and_prev_sd(d, d*log(d)/2,  # noqa
-                                             lift_union_bound=True,
-                                             number_targets=d, tours=1)
-    # lattice was scaled up, so prev_sd need to be scaled back
-    prev_sd /= sqrt(d)
+    if simulate:
+        beta, prev_sd = predict_beta_and_prev_sd(d, d*log(d)/2,  # noqa
+                                                 lift_union_bound=True,
+                                                 number_targets=d, tours=1)
+        # lattice was scaled up, so prev_sd need to be scaled back
+        # here we are simulating the previous first length, in
+        # findStandardDeviation we are calculating it from a simulated beta
+        prev_sd /= sqrt(d)
+    else:
+        # this is exactly the same argument as in findStandardDeviation
+        beta, prev_sd = findStandardDeviation(d, k_fac=False, simulate=False)
     return beta, prev_sd
+
+
+def modelssec(drange, simulate=False, simulatessec=False):
+    """
+    Gives a model for the growth of sigma_sec as the dimension grows, via
+    various levels of simulation.
+    If both flags are False we estimate the first length before canonical
+    discovery as
+
+        rhf(beta)^(d-1) for minimal beta such that
+            sqrt(beta/d) <= rhf(beta)^(2 beta - d + 1)
+
+    and therefore return ssec = rhf(beta)^(d-1) / sqrt(d)
+    If simulate is True we simulate the minimal beta and calculate ssec as
+    above, if simulate and simulatessec are True then we take ssec directly
+    from simulation
+
+    :param drange:       the range of dimensions to compute the model over
+    :param simulate:     if True simulate beta
+    :param simulatessec: if True simulate ssec
+
+
+    ..note::    we expect a model of the shape a d^.5 + b as a sufficient
+                blocksize is d/2
+    """
+    data = []
+    for d in drange:
+        if simulate and simulatessec:
+            _, ssec = key_recovery_beta_ssec(d, simulate=True)
+        elif simulate and not simulatessec:
+            _, ssec = findStandardDeviation(d, simulate=True)
+        elif not simulate and not simulatessec:
+            _, ssec = findStandardDeviation(d, simulate=False)
+        else:
+            raise NotImplementedError
+        data += [(d, ssec)]
+
+    var('a', 'b', 'x')
+    model(x) = a*sqrt(x) + b # noqa
+    sol = find_fit(data, model)
+    show(sol)
+    return sol
 
 
 def statistical_ssign(d, lam, q_s):
