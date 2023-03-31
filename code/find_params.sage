@@ -1,5 +1,5 @@
 from sage.all import ceil, e, floor, Infinity, IntegerRange, load, log, pi, \
-        RR, sqrt, var, find_fit, model, show
+        RR, sqrt, var, find_fit, show
 from proba_utils import centered_discrete_Gaussian_law, law_square, \
         law_convolution, iter_law_convolution, pos_head_probability, \
         tail_probability
@@ -122,7 +122,7 @@ def keyRecoveryADPSstyle(d, k_fac=False):
             return beta
 
 
-def findStandardDeviation(d, k_fac=False, simulate=False):
+def findStandardDeviation(d, k_fac=False, simulate=False, simulatessec=False):
     """
     An attempt to find the standard deviation at which dimension d instances
     exhibit maximum hardness, based on the idea that if ||(f, g)|| is longer
@@ -132,14 +132,17 @@ def findStandardDeviation(d, k_fac=False, simulate=False):
     :param d:           an integer dimension
     :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
     :param simulate:    if ``False`` use ADPS methodology, else leaky-LWE
+    :param simulatessec: if True simulate ssec
     :returns:           a standard deviation (not Gaussian width) sigma and the
                         beta we expect to represent maximum hardness
     """
     if simulate:
-        beta, _ = key_recovery_beta_ssec(d)
+        beta, ssec = key_recovery_beta_ssec(d, simulate=True)
     else:
         beta = keyRecoveryADPSstyle(d, k_fac=k_fac)
-    return beta, rhf(beta)**(d-1.)/d**.5
+    if not simulate or not simulatessec:
+        ssec = (rhf(beta)**(d-1.))/d**.5
+    return beta, ssec
 
 
 def key_recovery_beta_ssec(d, simulate=True):
@@ -194,9 +197,9 @@ def modelssec(drange, simulate=False, simulatessec=False):
     data = []
     for d in drange:
         if simulate and simulatessec:
-            _, ssec = key_recovery_beta_ssec(d, simulate=True)
+            _, ssec = findStandardDeviation(d, simulate=True, simulatessec=True)
         elif simulate and not simulatessec:
-            _, ssec = findStandardDeviation(d, simulate=True)
+            _, ssec = findStandardDeviation(d, simulate=True, simulatessec=False)
         elif not simulate and not simulatessec:
             _, ssec = findStandardDeviation(d, simulate=False)
         else:
