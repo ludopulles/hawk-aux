@@ -110,7 +110,8 @@ def keyRecoveryADPSstyle(d, k_fac=False):
     estimator.
 
     :param d:       an integer dimension
-    :param k_fac:   include a multiplicative factor of (4/3)**.5 in rhs
+    :param k_fac:   include a multiplicative factor of (4/3)**.5 in rhs, as in
+                    FALCON (just for testing)
     :returns:       a blocksize ``beta``
     """
     for beta in [2, 5, 10, 15, 20, 25, 28, 40] + list(range(41, d)):
@@ -122,7 +123,26 @@ def keyRecoveryADPSstyle(d, k_fac=False):
             return beta
 
 
-def findStandardDeviation(d, k_fac=False, simulate=False, simulatessec=False):
+def key_recovery_beta_ssec(d):
+    """
+    Use the leaky-LWE-estimator to determine the expected successful blocksize
+    that recovers a lattice vector of length one from some basis of ZZ^d, along
+    with the length of the shortest vector found before the vector of length
+    one i.e. len = ssec * sqrt(d)
+
+    :param d:       an integer dimension
+    :returns:       ``beta`` an estimate for the required blocksize for key
+                        recovery, and ``ssec``the estimates the length of
+                        the previous shortest vector
+    """
+    beta, ssec = predict_beta_and_prev_sd(d, d*log(d)/2, lift_union_bound=True,
+                                          number_targets=d, tours=1)
+    # lattice was scaled up, so ssec need to be scaled back
+    ssec /= sqrt(d)
+    return beta, ssec
+
+
+def findBetaSsec(d, simulate=False, simulatessec=False, k_fac=False):
     """
     An attempt to find the standard deviation at which dimension d instances
     exhibit maximum hardness, based on the idea that if ||(f, g)|| is longer
@@ -130,45 +150,19 @@ def findStandardDeviation(d, k_fac=False, simulate=False, simulatessec=False):
     then we are in the regime where our lattice reduction heuristics hold
 
     :param d:           an integer dimension
-    :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
     :param simulate:    if ``False`` use ADPS methodology, else leaky-LWE
     :param simulatessec: if True simulate ssec
+    :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
     :returns:           a standard deviation (not Gaussian width) sigma and the
                         beta we expect to represent maximum hardness
     """
     if simulate:
-        beta, ssec = key_recovery_beta_ssec(d, simulate=True)
+        beta, ssec = key_recovery_beta_ssec(d)
     else:
         beta = keyRecoveryADPSstyle(d, k_fac=k_fac)
     if not simulate or not simulatessec:
         ssec = (rhf(beta)**(d-1.))/d**.5
     return beta, ssec
-
-
-def key_recovery_beta_ssec(d, simulate=True):
-    """
-    Use the leaky-LWE-estimator to determine the expected successful blocksize
-    that recovers a lattice vector of length one from some basis of ZZ^d, along
-    with the length of the shortest vector found before the vector of length
-    one i.e. len = prev_sd * sqrt(d)
-
-    :param d:       an integer dimension
-    :returns:       ``beta`` an estimate for the required blocksize for key
-                        recovery, and ``prev_sd``the estimates the length of
-                        the previous shortest vector
-    """
-    if simulate:
-        beta, prev_sd = predict_beta_and_prev_sd(d, d*log(d)/2,  # noqa
-                                                 lift_union_bound=True,
-                                                 number_targets=d, tours=1)
-        # lattice was scaled up, so prev_sd need to be scaled back
-        # here we are simulating the previous first length, in
-        # findStandardDeviation we are calculating it from a simulated beta
-        prev_sd /= sqrt(d)
-    else:
-        # this is exactly the same argument as in findStandardDeviation
-        beta, prev_sd = findStandardDeviation(d, k_fac=False, simulate=False)
-    return beta, prev_sd
 
 
 def modelssec(drange, simulate=False, simulatessec=False):
@@ -197,11 +191,11 @@ def modelssec(drange, simulate=False, simulatessec=False):
     data = []
     for d in drange:
         if simulate and simulatessec:
-            _, ssec = findStandardDeviation(d, simulate=True, simulatessec=True)
+            _, ssec = findBetaSsec(d, simulate=True, simulatessec=True)
         elif simulate and not simulatessec:
-            _, ssec = findStandardDeviation(d, simulate=True, simulatessec=False)
+            _, ssec = findBetaSsec(d, simulate=True, simulatessec=False)
         elif not simulate and not simulatessec:
-            _, ssec = findStandardDeviation(d, simulate=False)
+            _, ssec = findBetaSsec(d, simulate=False)
         else:
             raise NotImplementedError
         data += [(d, ssec)]
@@ -209,7 +203,6 @@ def modelssec(drange, simulate=False, simulatessec=False):
     var('a', 'b', 'x')
     model(x) = a*sqrt(x) + b # noqa
     sol = find_fit(data, model)
-    show(sol)
     return sol
 
 
@@ -231,10 +224,31 @@ def statistical_ssign(d, lam, q_s):
     return RR(ssign)
 
 
-def fail_and_forge_probabilities(d, ssign, sver, ssec):
+def failProbability(d, ssign, sver, A2_d=None):
     """
-    Determines the probabilities that a signature is too long (fail) and
-    that the (weak) signature forgery attack works
+    Determines the probability that signing fails because x is too long
+
+    :param ssign:       a standard deviation controlling the length of elements
+                            sampling during signing
+    :param sver:        a standard deviation controlling the length of
+                            acceptable signatures
+    :returns:           log2 of the above failure probability
+    """
+    sqr_radius = d * sver**2.
+
+    if A2_d is None:
+        A = centered_discrete_Gaussian_law(ssign)
+        A2 = law_square(A)
+        A2_d = iter_law_convolution(A2, d)
+
+    fail_probability = tail_probability(A2_d, sqr_radius)
+    fail = float(slog(fail_probability, 2))
+    return fail
+
+
+def forgeProbability(d, ssign, sver, ssec, A2_d1=None):
+    """
+    Determines the probability that the (weak) signature forgery attack works
 
     :param d:           an integer dimension
     :param ssign:       a standard deviation controlling the length of elements
@@ -243,9 +257,25 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
                             acceptable signatures
     :param ssec:        a standard deviation that describes the length of the
                             shortest vector discovered before key recovery
-    :returns:           log2 of the ``fail`` probability and log2 of the (weak)
-                            forgery probability
+    :returns:           log2 of the (weak) forgery probability
     """
+    sqr_radius = d * sver**2.
+    flen = floor(d**.5 * ssec)
+    flen_sqr = floor(d * ssec**2)
+
+    A = centered_discrete_Gaussian_law(ssign)
+
+    if A2_d1 is None:
+        A2 = law_square(A)
+        A2_d1 = iter_law_convolution(A2, d-1)
+
+    Bonedim = {flen: 1}
+    Conedim = law_convolution(A, Bonedim)
+    C2onedim = law_square(Conedim)
+    Donedim = law_convolution(A2_d1, C2onedim)
+
+    onedimforge_probability = pos_head_probability(Donedim, sqr_radius)
+    forgeonedim = float(slog(onedimforge_probability, 2))
 
     def diagonal_B(d, len_sqr):
         """
@@ -285,29 +315,6 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
             entries[upp] = dupp
         return entries
 
-    sqr_radius = d * sver**2.
-    flen = floor(d**.5 * ssec)
-    flen_sqr = floor(d * ssec**2)
-
-    A = centered_discrete_Gaussian_law(ssign)
-
-    Bonedim = {flen: 1}
-
-    A2 = law_square(A)
-    A2_d = iter_law_convolution(A2, d)
-
-    fail_probability = tail_probability(A2_d, sqr_radius)
-    fail = float(slog(fail_probability, 2))
-
-    # calculate forge for B all in one coordinate
-    A2_d1 = iter_law_convolution(A2, d - 1)
-    Conedim = law_convolution(A, Bonedim)
-    C2onedim = law_square(Conedim)
-    Donedim = law_convolution(A2_d1, C2onedim)
-
-    onedimforge_probability = pos_head_probability(Donedim, sqr_radius)
-    forgeonedim = float(slog(onedimforge_probability, 2))
-
     # calculate forge for B as ``diagonal`` as possible
     try:
         entries = diagonal_B(d, flen_sqr)
@@ -328,88 +335,7 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
         print('diagonal B failed to make a vector')
 
     forge = max(forgediag, forgeonedim)
-
-    return fail, forge
-
-
-def falcon_blocksizes(d, falcon=False, k_fac=True):
-    """
-    A function to allow comparisons to the Falcon style of estimate for the
-    required blocksizes for key recovery and strong signature forgery
-
-    :param d:       an integer dimension
-    :param falcon:  a bool that if ``True`` considers Falcon parameters, and
-                        otherwise Hawk parameters
-    :param k_fac:   a multiplicative factor of sqrt(4/3) that is applied to
-                        rhs during the key recovery attack
-    :returns:       an estimate ``beta_key`` for key recovery and
-                        ``beta_forge`` for strong signature forgery
-
-    .. note::       in the Falcon key recovery methodology they apply both
-                    k_fac and dimensions for free techniques, as decscribed in
-                    App D
-    """
-    assert d == 1024 or d == 2048, "please choose a Falcon/Hawk d"
-    assert isinstance(falcon, bool), "falcon must be a bool"
-    assert isinstance(k_fac, bool), "k_fac must be a bool"
-
-    n = int(d/2)
-
-    if falcon:
-        q = 12289
-    else:
-        q = 1
-        if n == 512:
-            sver = 1.425
-        if n == 1024:
-            sver = 1.572
-    dth_root_vol = sqrt(q)
-
-    def gh_sqr(d):
-        """
-        The Gaussian heuristic for the square length of a shortest vector in
-        a unit volume lattice of dimension d
-
-        :param d:       a dimension
-        :returns:       the "exact" heuristic (i.e. using the Gamma function
-                            without Stirling's approximation)
-        """
-        assert d >= 50, "the dimension must be >= 50"
-        return float((d/(2*pi*e))*(pi*d)**(1/d))
-
-    # key recovery
-    for beta_key in range(50, d):
-        if falcon:
-            skeygen = 1.17*(q/d)**.5
-            lhs = sqrt(beta_key) * skeygen
-        else:
-            # projections of something of length 1
-            lhs = sqrt(beta_key / d)
-        rhs = (beta_key/(2*pi*e))**(1 - n/beta_key) * dth_root_vol
-        # more accurate is
-        # power = (2*beta_key - d + 1)/(2*(beta_key-1))
-        # rhs = gh_sqr(beta_key)**power * dth_root_vol
-        if k_fac:
-            rhs *= (4/3)**.5
-        if lhs <= rhs:
-            break
-
-    # signature forgery
-    if falcon:
-        sver = falcon_sver(n)
-        verif_length_sqr = floor((1.1 * sver * sqrt(d))**2)
-    else:
-        verif_length_sqr = d * sver**2
-    for beta_forge in range(50, d):
-        lhs = (beta_forge/(2*pi*e))**(2*n/beta_forge) * q
-        # more accurate is
-        # lhs = gh_sqr(beta_forge)**((d-1)/(beta_forge-1)) * q
-        rhs = verif_length_sqr
-        if lhs <= rhs:
-            break
-    print("d, falcon, sqrt{4/3}:", d, falcon, k_fac)
-    print("beta_key, beta_forge:", beta_key, beta_forge)
-    return beta_key, beta_forge
+    return forge
 
 
 def dimensions_for_free(beta):
@@ -421,29 +347,6 @@ def dimensions_for_free(beta):
     :returns:       a smaller blocksize via dimensions for free techniques
     """
     return beta - round(beta * log(4./3.) / log(beta / (2 * pi * e)))
-
-
-def falcon_sver(n):
-    """
-    Return the standard deviations that control the length of acceptable
-    signatures for Falcon-512 and Falcon-1024
-
-    :param n:       element of {512, 1024}
-    :returns:       standard deviation sver for Falcon
-
-    .. note::       We would calculate this quantity in general as
-                    eps = 1/sqrt(lam*q_s)
-                    first = (1/pi) * sqrt((log(4*n*(1 + 1/eps)))/2)
-                    second = 1.17 * sqrt(q)
-                    return RR(first*second)
-                    for lam = 128, q = 12289 and q_s = 2**64
-    """
-    assert n == 512 or n == 1024, "Choose a Falcon n"
-
-    if n == 512:
-        return 165.736617183
-    if n == 1024:
-        return 168.388571447
 
 
 def sign_fail_sver_search(d, ssign, q_s=2**64):
@@ -488,7 +391,7 @@ def sign_fail_sver_search(d, ssign, q_s=2**64):
     return sver, fail
 
 
-def find_params(d, lam, q_s=2**64, beta_key=None, ssec=None):
+def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     """
     A script to find parameters that satisfy our signature forgery
     cryptanalysis, and statistical requirements.
@@ -506,32 +409,37 @@ def find_params(d, lam, q_s=2**64, beta_key=None, ssec=None):
     ..note: one must check the beta for signature forging and key recovery
             are sufficient, lam and q_s input parameters are solely for
             statistical arguments
+    ..note: no dimensions for free applied here
     """
     ssign = statistical_ssign(d, lam, q_s)
-    if beta_key is None or ssec is None:
-        beta_key, ssec = key_recovery_beta_ssec(d)
-        beta_key = int(beta_key)
-        ssec = float(ssec)
+
+    if betaKey is None or ssec is None:
+        betaKey_, ssec_ = findBetaSsec(d, simulate=True, simulatessec=True)
+        if betaKey is None:
+            betaKey = int(betaKey_)
+        if ssec is None:
+            ssec = float(ssec_)
 
     assert ssec > ssign
     assert ssign > ssec / 2
     # fix sver to ssign (its lower bound)
     sver = ssign
-    _, forge = fail_and_forge_probabilities(d, ssign, sver, ssec)
+
+    # precompute A2_d and A2_d1
+    A = centered_discrete_Gaussian_law(ssign)
+    A2 = law_square(A)
+    A2_d1 = iter_law_convolution(A2, d-1)
+    A2_d = law_convolution(A2_d1, A2)
+
+    forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
 
     if forge > -lam:
         print('no parameters')
         return
 
-    # now increase sver until either forge becomes too high
-    # or
-    # both fail and forge are small enough (no point increasing sver further)
-    # or
-    # beta_forge less than beta_key (no point having forgery harder than key
-    # recovery)
-
     steps = 15
-    delta = min((2**.5 - 1.05) * ssign, (ssec - ssign)) / (steps - 1)
+    delta = (ssec - ssign) / (steps - 1)
+    # delta = min((2**.5 - 1.05) * ssign, (ssec - ssign)) / (steps - 1)
 
     assert steps > 2
     assert delta > 0
@@ -542,44 +450,38 @@ def find_params(d, lam, q_s=2**64, beta_key=None, ssec=None):
         sver = ssign + i*delta
 
         print("calculating fail and forge for", i)
-        fail, forge = fail_and_forge_probabilities(d, ssign, sver, ssec)
-        # weak forgeries too easy
+        fail = failProbability(d, ssign, sver, A2_d=A2_d)
+        forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
+        # weak forgeries too easy, note we have checked that for i = 0 this
+        # does not happen
         if forge > -lam:
             sver = ssign + (i - 1) * delta
             break
-
-        print("calculating beta forge for", i)
-        beta_forge = approx_SVP_beta(d, sver=sver)
 
         # if both failure probability and forgery probability low enough, stop
         if fail <= -lam and forge <= -lam:
             break
 
-        print("sver, fail, forge, beta_forge", sver, fail, forge, beta_forge)
-
-        # at this point forgery easier or equal to key recovery, so stop
-        if beta_forge <= beta_key:
-            break
-
-    print("recalculating everything")
-    fail, forge = fail_and_forge_probabilities(d, ssign, sver, ssec)
-    beta_forge = approx_SVP_beta(d, sver=sver)
+    print("checking everything")
+    fail = failProbability(d, ssign, sver, A2_d=A2_d)
+    forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
+    betaForge = approx_SVP_beta(d, sver=sver)
 
     assert ssign <= sver
     assert sver <= ssec
     assert forge <= -lam
 
     print("Dim, lambda, log2(q_s):", d, lam, log(q_s, 2).n())
-    print("key recovery beta:", beta_key)
-    print("forging beta     :", beta_forge)
+    print("key recovery beta:", betaKey)
+    print("forging beta     :", betaForge)
     print("s{sign, sec, ver}:", ssign, ssec, sver)
     print("log2(p_sig_fail) :", fail)
     print("log2(p_sig_forge):", forge)
     print()
 
     params = {}
-    params['beta_key'] = beta_key
-    params['beta_forge'] = beta_forge
+    params['betaKey'] = betaKey
+    params['betaForge'] = betaForge
     params['ssign'] = ssign
     params['ssec'] = ssec
     params['sver'] = sver
@@ -590,28 +492,32 @@ def find_params(d, lam, q_s=2**64, beta_key=None, ssec=None):
 
 
 # find hawk parameters, if beta_key and ssec absent, start from scratch
-# find_params(512, 64, q_s=2**32, beta_key=211, ssec=1.042)
-# find_params(1024, 128, q_s=2**64, beta_key=452, ssec=1.425)
+# findParams(512, 64, q_s=2**32, beta_key=211, ssec=1.042)
+# findParams(1024, 128, q_s=2**64, beta_key=452, ssec=1.425)
 
-# find_params(512, 64, q_s=2**32)
-# find_params(1024, 128, q_s=2**64)
+# findParams(512, 64, q_s=2**32)
+# findParams(1024, 128, q_s=2**64)
 
 # We find HAWK-1024 parameters slightly differently as we have much more
-# room to play with sver
+# room to play with sver and failure probability
 """
-ssign = statistical_ssign(2048, 256, 2**64)
-# beta_key, ssec = key_recovery_beta_ssec(2048)
-# beta_key = int(beta_key)
+d = 2048
+lambda = 256
+ssign = statistical_ssign(d, lambda, 2**64)
+# betaKey, ssec = findBetaSsec(2048, simulate=True, simulatessec=True)
+# betaKey = int(betaKey)
 # ssec = float(ssec)
 ssec = 1.974
-beta_key = 940
-sver, _ = sign_fail_sver_search(2048, ssign)
+betaKey = 940
+sver, _ = sign_fail_sver_search(d, ssign)
 sver = round(sver, 3)
-fail, forge = fail_and_forge_probabilities(2048, ssign, sver, ssec)
-beta_forge = approx_SVP_beta(2048, sver=sver)
+fail = failProbability(d, ssign, sver)
+forge = forgeProbability(d, ssign, sver, ssec)
+# betaForge = approx_SVP_beta(2048, sver=sver)
+betaForge = 1009
 params = {}
-params['beta_key'] = beta_key
-params['beta_forge'] = beta_forge
+params['betaKey'] = betaKey
+params['betaForge'] = betaForge
 params['ssign'] = ssign
 params['ssec'] = ssec
 params['sver'] = sver
@@ -619,25 +525,3 @@ params['fail'] = fail
 params['forge'] = forge
 print(params)
 """
-
-# compare hawk and falcon using falcon methodology
-
-# falcon_blocksizes(1024, falcon=True, k_fac=True)
-
-# falcon_blocksizes(2048, falcon=True, k_fac=True)
-
-# beta_key, beta_forge = falcon_blocksizes(1024, falcon=True, k_fac=False)
-# print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
-
-# beta_key, beta_forge = falcon_blocksizes(2048, falcon=True, k_fac=False)
-# print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
-
-# falcon_blocksizes(1024, falcon=False, k_fac=True)
-
-# falcon_blocksizes(2048, falcon=False, k_fac=True)
-
-# beta_key, beta_forge = falcon_blocksizes(1024, falcon=False, k_fac=False)
-# print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
-
-# beta_key, beta_forge = falcon_blocksizes(2048, falcon=False, k_fac=False)
-# print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
