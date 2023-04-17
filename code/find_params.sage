@@ -502,8 +502,8 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
 # room to play with sver and failure probability
 """
 d = 2048
-lambda = 256
-ssign = statistical_ssign(d, lambda, 2**64)
+lam = 256
+ssign = statistical_ssign(d, lam, 2**64)
 # betaKey, ssec = findBetaSsec(2048, simulate=True, simulatessec=True)
 # betaKey = int(betaKey)
 # ssec = float(ssec)
