@@ -123,7 +123,7 @@ def keyRecoveryADPSstyle(d, k_fac=False):
             return beta
 
 
-def key_recovery_beta_ssec(d):
+def key_recovery_beta_ssec(d, tours=1):
     """
     Use the leaky-LWE-estimator to determine the expected successful blocksize
     that recovers a lattice vector of length one from some basis of ZZ^d, along
@@ -136,7 +136,7 @@ def key_recovery_beta_ssec(d):
                         the previous shortest vector
     """
     beta, ssec = predict_beta_and_prev_sd(d, d*log(d)/2, lift_union_bound=True,
-                                          number_targets=d, tours=1)
+                                          number_targets=d, tours=tours)
     # lattice was scaled up, so ssec need to be scaled back
     ssec /= sqrt(d)
     return beta, ssec
