@@ -349,48 +349,6 @@ def dimensions_for_free(beta):
     return beta - round(beta * log(4./3.) / log(beta / (2 * pi * e)))
 
 
-def sign_fail_sver_search(d, ssign, q_s=2**64):
-    """
-    A function to final minimal sver such that signature failure probability
-    is  1 / (q_s ** 2)
-
-    :param d:       an integer dimension
-    :param ssign:   a standard deviation controlling the length of elements
-                        sampling during signing
-    :param q_s:     allowable signature queries for statistical arguments
-    :returns:       an sver
-
-    ..note::        we only use this for HAWK-1024 parameters
-    """
-    lower = ssign
-    upper = ssign * 2**.5
-    steps = 1000
-    delta = (upper - lower) / steps
-    target = -2 * log(q_s, 2)
-
-    A = centered_discrete_Gaussian_law(ssign)
-    A2 = law_square(A)
-    A2_d = iter_law_convolution(A2, d)
-
-    break_next_iteration = False
-
-    for i in range(steps):
-        sver = lower + i*delta
-
-        sqr_radius = d * sver**2.
-        fail_probability = tail_probability(A2_d, sqr_radius)
-        fail = float(slog(fail_probability, 2))
-
-        if break_next_iteration:
-            break
-
-        if fail <= target:
-            # gives a little headroom
-            break_next_iteration = True
-
-    return sver, fail
-
-
 def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     """
     A script to find parameters that satisfy our signature forgery
@@ -412,6 +370,15 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     ..note: no dimensions for free applied here
     """
     ssign = statistical_ssign(d, lam, q_s)
+    # The probability that the (weak) signature forgery attack works, should be
+    # _at most_ 2^{-lambda}.
+    forge_target = -lam
+    # The probability that signing fails because x is too long, will be taken to
+    # be _at least_ 1 / (q_s ** 2). If it would be even slightly smaller, taking
+    # a smaller sver would only make the forge probability smaller (making
+    # forgeries harder) while it would still be unlikely one will ever see some
+    # x being too long during signing of q_s signatures.
+    fail_target = -2 * log(q_s, 2)
 
     if betaKey is None or ssec is None:
         betaKey_, ssec_ = findBetaSsec(d, simulate=True, simulatessec=True)
@@ -422,8 +389,6 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
 
     assert ssec > ssign
     assert ssign > ssec / 2
-    # fix sver to ssign (its lower bound)
-    sver = ssign
 
     # precompute A2_d and A2_d1
     A = centered_discrete_Gaussian_law(ssign)
@@ -431,36 +396,43 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     A2_d1 = iter_law_convolution(A2, d-1)
     A2_d = law_convolution(A2_d1, A2)
 
-    forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
+    # Find, with a binary search, sver \in [ssign, ssec] such that the forge
+    # probability is at most forge_target
+    sver_lo = ssign
+    sver_hi = ssec
 
-    if forge > -lam:
+    fail = failProbability(d, ssign, sver_lo, A2_d=A2_d)
+    forge = forgeProbability(d, ssign, sver_lo, ssec, A2_d1=A2_d1)
+    print(f"sver={sver_lo} gives a fail prob of 2^{fail} and forge prob of 2^{forge}.")
+    if not (fail >= fail_target and forge <= forge_target):
         print('no parameters')
         return
 
-    steps = 15
-    delta = (ssec - ssign) / (steps - 1)
-    # delta = min((2**.5 - 1.05) * ssign, (ssec - ssign)) / (steps - 1)
+    fail = failProbability(d, ssign, sver_hi, A2_d=A2_d)
+    forge = forgeProbability(d, ssign, sver_hi, ssec, A2_d1=A2_d1)
+    print(f"sver={sver_hi} gives a fail prob of 2^{fail} and forge prob of 2^{forge}.")
+    if fail >= fail_target and forge <= forge_target:
+        sver = sver_hi
+    else:
+        # Run a binary search
+        for i in range(20):
+            sver = 0.5 * (sver_lo + sver_hi)
 
-    assert steps > 2
-    assert delta > 0
+            fail = failProbability(d, ssign, sver, A2_d=A2_d)
+            forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
+            print(f"sver={sver} gives a fail prob of 2^{fail} and forge prob of 2^{forge}.")
 
-    for i in range(steps):
-        print("i of steps:", i, steps)
+            print(f"[{sver_lo}, {sver_hi}] => {fail >= fail_target} and {forge <= forge_target}")
+            if fail >= fail_target and forge <= forge_target:
+                # weak forgeries are hard enough for this value of sver
+                sver_lo = sver
+            else:
+                # weak forgeries are too easy for this value of sver
+                sver_hi = sver
 
-        sver = ssign + i*delta
-
-        print("calculating fail and forge for", i)
-        fail = failProbability(d, ssign, sver, A2_d=A2_d)
-        forge = forgeProbability(d, ssign, sver, ssec, A2_d1=A2_d1)
-        # weak forgeries too easy, note we have checked that for i = 0 this
-        # does not happen
-        if forge > -lam:
-            sver = ssign + (i - 1) * delta
-            break
-
-        # if both failure probability and forgery probability low enough, stop
-        if fail <= -lam and forge <= -lam:
-            break
+        # The final verification sigma is chosen as the largest (tested) value
+        # that has a small enough forge probability.
+        sver = sver_lo
 
     print("checking everything")
     fail = failProbability(d, ssign, sver, A2_d=A2_d)
@@ -469,7 +441,8 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
 
     assert ssign <= sver
     assert sver <= ssec
-    assert forge <= -lam
+    assert fail >= fail_target
+    assert forge <= forge_target
 
     print("Dim, lambda, log2(q_s):", d, lam, log(q_s, 2).n())
     print("key recovery beta:", betaKey)
@@ -491,37 +464,7 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     return params
 
 
-# find hawk parameters, if beta_key and ssec absent, start from scratch
-# findParams(512, 64, q_s=2**32, beta_key=211, ssec=1.042)
-# findParams(1024, 128, q_s=2**64, beta_key=452, ssec=1.425)
-
-# findParams(512, 64, q_s=2**32)
-# findParams(1024, 128, q_s=2**64)
-
-# We find HAWK-1024 parameters slightly differently as we have much more
-# room to play with sver and failure probability
-"""
-d = 2048
-lam = 256
-ssign = statistical_ssign(d, lam, 2**64)
-# betaKey, ssec = findBetaSsec(2048, simulate=True, simulatessec=True)
-# betaKey = int(betaKey)
-# ssec = float(ssec)
-ssec = 1.974
-betaKey = 940
-sver, _ = sign_fail_sver_search(d, ssign)
-sver = round(sver, 3)
-fail = failProbability(d, ssign, sver)
-forge = forgeProbability(d, ssign, sver, ssec)
-# betaForge = approx_SVP_beta(2048, sver=sver)
-betaForge = 1009
-params = {}
-params['betaKey'] = betaKey
-params['betaForge'] = betaForge
-params['ssign'] = ssign
-params['ssec'] = ssec
-params['sver'] = sver
-params['fail'] = fail
-params['forge'] = forge
-print(params)
-"""
+# find hawk parameters, if betaKey and ssec absent, start from scratch
+# findParams(512, 64, q_s=2**32, betaKey=211, ssec=1.042)
+# findParams(1024, 128, q_s=2**64, betaKey=452, ssec=1.425)
+# findParams(2048, 256, q_s=2**64, betaKey=940, ssec=1.974)
