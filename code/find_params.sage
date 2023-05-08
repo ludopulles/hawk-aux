@@ -464,7 +464,23 @@ def findParams(d, lam, q_s=2**64, betaKey=None, ssec=None):
     return params
 
 
-# find hawk parameters, if betaKey and ssec absent, start from scratch
-# findParams(512, 64, q_s=2**32, betaKey=211, ssec=1.042)
-# findParams(1024, 128, q_s=2**64, betaKey=452, ssec=1.425)
-# findParams(2048, 256, q_s=2**64, betaKey=940, ssec=1.974)
+# Find HAWK parameters from scratch.
+# This takes ~3hours on a decent CPU.
+"""
+findParams(512, 64, q_s=2**32)
+# output: s{sign, sec, ver}: 1.00912944750969 1.0415240265983814 1.0415240265983814
+findParams(1024, 128, q_s=2**64)
+# output: s{sign, sec, ver}: 1.27783369691283 1.4252478209310997 1.4252478209310997
+findParams(2048, 256, q_s=2**64)
+# output: s{sign, sec, ver}: 1.29828033434429 1.9740905690067685 1.57138068874436
+"""
+
+# Find HAWK parameters with betaKey and ssec precomputed:
+"""
+findParams(512, 64, q_s=2**32, betaKey=211, ssec=1.042)
+# output: {sign, sec, ver}: 1.00912944750969 1.04200000000000 1.04200000000000
+findParams(1024, 128, q_s=2**64, betaKey=452, ssec=1.425)
+# output: s{sign, sec, ver}: 1.27783369691283 1.42500000000000 1.42500000000000
+findParams(2048, 256, q_s=2**64, betaKey=940, ssec=1.974)
+# output: s{sign, sec, ver}: 1.29828033434429 1.97400000000000 1.57138082081982
+"""
