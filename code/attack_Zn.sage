@@ -26,11 +26,12 @@ def many_experiment(experiments, processes, n, sigma=20, tours=1, dual=False,
     res = [x for x in res if x is not None]
     if not len(res):
         return 0, 0
-    avg_b = float(sum([x[0] for x in res])/len(res))
-    avg_normalised_prevnorm = float(sum([x[1] for x in res])/len(res))
-    geo_normalised_prevnorm = float(prod([x[1] for x in res]))**(1./len(res))
-    profiles = [x[2] for x in res]
-    return avg_b, avg_normalised_prevnorm, geo_normalised_prevnorm, profiles
+    return [x[0] for x in res]
+#     avg_b = float(sum([x[0] for x in res])/len(res))
+#     avg_normalised_prevnorm = float(sum([x[1] for x in res])/len(res))
+#     geo_normalised_prevnorm = float(prod([x[1] for x in res]))**(1./len(res))
+#     profiles = [x[2] for x in res]
+#     return avg_b, avg_normalised_prevnorm, geo_normalised_prevnorm, profiles
 
 
 def many_experiment_structured(experiments, processes, n, sigma=20, tours=1,

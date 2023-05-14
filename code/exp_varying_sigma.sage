@@ -18,15 +18,17 @@ sigma_min = float(argv[4])
 sigma_max = float(argv[5])
 sigma_step = float(argv[6])
 
-g6k = bool(argv[7])
+# g6k = bool(argv[7])
 
 print("n, \t,sigma \t beta,\t prev_sd")
 
 sigma = sigma_min
 
 while sigma < sigma_max:
-    beta, prev_sd, _, _ = many_experiment(experiments, processes, n,
-                                          sigma=sigma, float_type=float_type,
-                                          g6k=g6k)
-    print("%d,%.3f,%.3f,%.3f" % (n, sigma, beta, prev_sd))
+    out = many_experiment(experiments, processes, n, sigma=sigma, float_type=float_type, g6k=False)
+    print(out)
+    # beta, prev_sd, _, _ = many_experiment(experiments, processes, n,
+    #                                       sigma=sigma, float_type=float_type,
+    #                                       g6k=g6k)
+    # print("%d,%.3f,%.3f,%.3f" % (n, sigma, beta, prev_sd))
     sigma += sigma_step

@@ -4,12 +4,9 @@
 from sage.all_cmdline import *   # import sage library
 
 _sage_const_2 = Integer(2); _sage_const_1 = Integer(1); _sage_const_0 = Integer(0); _sage_const_32 = Integer(32); _sage_const_1p5 = RealNumber('1.5'); _sage_const_1p1 = RealNumber('1.1')
-from sage.all import CyclotomicField, identity_matrix, is_even, log, \
-        randint, xgcd
-from sage.stats.distributions.discrete_gaussian_integer import \
-        DiscreteGaussianDistributionIntegerSampler as DGaussZ
-from sage.stats.distributions.discrete_gaussian_lattice import \
-        DiscreteGaussianDistributionLatticeSampler as DGauss
+from sage.all import CyclotomicField, identity_matrix, is_even, log,         randint, xgcd
+from sage.stats.distributions.discrete_gaussian_integer import         DiscreteGaussianDistributionIntegerSampler as DGaussZ
+from sage.stats.distributions.discrete_gaussian_lattice import         DiscreteGaussianDistributionLatticeSampler as DGauss
 
 
 class NotCoprimeError(Exception):
