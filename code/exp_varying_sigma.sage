@@ -14,7 +14,9 @@ print("n, \t,sigma \t beta,\t prev_sd")
 
 sigma = sigma_min
 while sigma < sigma_max:
-    beta, prev_sd, _, _ = many_experiment(experiments, processes, n,
-                                          sigma=sigma)
-    print("%d,%.3f,%.3f,%.3f" % (n, sigma, beta, prev_sd))
+    out = many_experiment(experiments, processes, n, sigma=sigma)
+    print(out)
+    # beta, prev_sd, _, _ = many_experiment(experiments, processes, n,
+    #                                       sigma=sigma)
+    # print("%d,%.3f,%.3f,%.3f" % (n, sigma, beta, prev_sd))
     sigma += sigma_step
