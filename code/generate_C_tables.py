@@ -2,14 +2,6 @@ from mpmath import mpf, mp, exp, log, floor, ceil, nstr, sqrt
 
 mp.prec = 1000
 
-# Parameters of the schemes HAWK-512 and HAWK-1024,
-# where you need to take logn = 9 and logn = 10 respectively.
-# HAWK-512 has a NIST-1 security level
-# HAWK-1024 has a NIST-5 security level
-sigma_sig = { 8: '1.010', 9: '1.278', 10: '1.299' }
-sigma_ver = { 8: 1.042, 9: 1.425, 10: 1.571 }
-sigma_sec = { 8: 1.042, 9: 1.425, 10: 1.974 }
-
 
 def rho(x, sigma):
     """
@@ -121,13 +113,14 @@ def print_sign_tables(logn, tables):
         tables[1].append(0)
     assert L == len(tables[1])
 
-    print(f"static const uint16_t sig_gauss_hi_Hawk_{1 << logn}[] = {{")
-    for i in range(L):
-        hi0, hi1 = tables[0][i] >> 63, tables[1][i] >> 63
-        if hi0 == 0 and hi1 == 0:
-            break
-        print(f"    0x{hi0:04X}, 0x{hi1:04X}, ")
-    print("};")
+    if max(tables[0][0], tables[1][0]) > (1 << 63):
+        print(f"static const uint16_t sig_gauss_hi_Hawk_{1 << logn}[] = {{")
+        for i in range(L):
+            hi0, hi1 = tables[0][i] >> 63, tables[1][i] >> 63
+            if hi0 == 0 and hi1 == 0:
+                break
+            print(f"    0x{hi0:04X}, 0x{hi1:04X}, ")
+        print("};")
 
     print(f"static const uint64_t sig_gauss_lo_Hawk_{1 << logn}[] = {{")
     for i in range(L):
@@ -180,14 +173,14 @@ def security_loss_tables(n, lam, q_s, P0, Q0, P1, Q1, a):
     return mpf('2')**(lam / (a - 1)) * renyi_div
 
 
-def optimise_security_loss_tables(logn, lam, prec):
-    Q0 = produce_gaussian(sigma_sig[logn], mpf('0'))
-    Q1 = produce_gaussian(sigma_sig[logn], 1 / mpf('2'))
+def optimise_security_loss_tables(logn, lam, q_s, sig, prec):
+    Q0 = produce_gaussian(sig, mpf('0'))
+    Q1 = produce_gaussian(sig, 1 / mpf('2'))
     P0 = CDT_to_dist(dist_to_CDT(Q0, prec, 0), 0, prec)
     P1 = CDT_to_dist(dist_to_CDT(Q1, prec, 1), 1, prec)
 
     def f(a):
-        return security_loss_tables(2**logn, lam, 2**64, P0, Q0, P1, Q1, a)
+        return security_loss_tables(2**logn, lam, q_s, P0, Q0, P1, Q1, a)
     alo, ahi = 2, 1 << 20
     # This performs a ternary to find the optimal value, assuming the function f is (strictly)
     # decreasing up to the optimum, and (strictly) increasing after that optimum.
@@ -242,13 +235,13 @@ def security_loss_cosets(n, lam, q_s, a):
     return mpf('2')**(lam / (a-1)) * renyi_div
 
 
-def optimise_security_loss_cosets(logn, lam, prec):
+def optimise_security_loss_cosets(logn, lam, q_s, prec):
     alo, ahi = 2, 1 << 20
     for it in range(50):
         a_l = (2 * alo + ahi) / 3.0
         a_r = (alo + 2 * ahi) / 3.0
-        loss_l = security_loss_cosets(2**logn, lam, 2**64, a_l)
-        loss_r = security_loss_cosets(2**logn, lam, 2**64, a_r)
+        loss_l = security_loss_cosets(2**logn, lam, q_s, a_l)
+        loss_r = security_loss_cosets(2**logn, lam, q_s, a_r)
 
         if loss_l < loss_r:
             ahi = a_r
@@ -256,25 +249,33 @@ def optimise_security_loss_cosets(logn, lam, prec):
             alo = a_l
 
     a_opt = round((alo + ahi) / 2)
-    return a_opt, security_loss_cosets(2**logn, lam, 2**64, a_opt)
+    return a_opt, security_loss_cosets(2**logn, lam, q_s, a_opt)
 
 
-def main():
+def __main__():
     """
     Compute cumulative probability tables used in HAWK's signature generation.
     Also report on the security loss caused by the approximation vs the perfect discrete gaussian
     distribution.
     """
-
-    # Since R_a(P||Q) is a non-decreasing function as a --> oo, we can take a = 513
-    # in any case even though a = 257 is sufficient for NIST-1.
-    prec = 78
+    # Parameters of the schemes HAWK-512 and HAWK-1024,
+    # where you need to take logn = 9 and logn = 10 respectively.
+    # HAWK-512 has a NIST-1 security level
+    # HAWK-1024 has a NIST-5 security level
+    sigma_sig = { 8: '1.010', 9: '1.278', 10: '1.299' }
+    sigma_ver = { 8: 1.042, 9: 1.425, 10: 1.571 }
+    sigma_sec = { 8: 1.042, 9: 1.425, 10: 1.974 }
 
     # Report on sigma_{sign}
     # Hawk sampling during signing
     for logn in [8, 9, 10]: # NIST-1 and NIST-5 respectively.
+        # Note: HAWK-256 could use less precision, because q_s = 2^32.
+        # prec = 63 if logn == 8 else 78
+        prec = 78
+        q_s = 2**32 if logn == 8 else 2**64
+
         # required Renyi divergence for signing should be < req_renyi
-        req_renyi = 1 + mpf('2')**(-(64 + 2 + (1 + logn)))
+        req_renyi = 1 + mpf('2')**(-(2 + (1 + logn))) / q_s
         lam = 2**(logn - 2) # 128, 256
 
         tables = []
@@ -288,9 +289,9 @@ def main():
             tables.append(cdt)
         print_sign_tables(logn, tables)
 
-        a_opt, loss = optimise_security_loss_tables(logn, lam, prec)
+        a_opt, loss = optimise_security_loss_tables(logn, lam, q_s, sigma_sig[logn], prec)
         print(f'Security loss (table based -> "ideal" HAWK): {nstr(loss, 10)} at order a={a_opt}')
-        a_opt, loss = optimise_security_loss_cosets(logn, lam, prec)
+        a_opt, loss = optimise_security_loss_cosets(logn, lam, q_s, prec)
         print(f"Security loss (sample in uniform coset 2Z^d + h -> sample in Z^d): "
               f"{nstr(loss, 10)} at order a={a_opt}\n")
 
@@ -308,4 +309,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    __main__()
