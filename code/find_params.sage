@@ -3,6 +3,7 @@ from sage.all import ceil, e, floor, Infinity, IntegerRange, load, log, pi, \
 from proba_utils import centered_discrete_Gaussian_law, law_square, \
         law_convolution, iter_law_convolution, pos_head_probability, \
         tail_probability
+#  predict_beta_and_prev_sd and predict_sign_forge_beta from this load
 load("BKZ_simulator.sage")
 
 
@@ -131,6 +132,7 @@ def key_recovery_beta_ssec(d, tours=1):
     one i.e. len = ssec * sqrt(d)
 
     :param d:       an integer dimension
+    :param tours:   a number of tours to simulate in progressive BKZ
     :returns:       ``beta`` an estimate for the required blocksize for key
                         recovery, and ``ssec``the estimates the length of
                         the previous shortest vector
@@ -142,30 +144,30 @@ def key_recovery_beta_ssec(d, tours=1):
     return beta, ssec
 
 
-def findBetaSsec(d, simulate=False, simulatessec=False, k_fac=False):
+def findBetaSsec(d, simulate=False, simulatessec=False, tours=1):
     """
     An attempt to find the standard deviation at which dimension d instances
     exhibit maximum hardness, based on the idea that if ||(f, g)|| is longer
     than the first basis we expect after lattice reduction by successful beta,
     then we are in the regime where our lattice reduction heuristics hold
 
-    :param d:           an integer dimension
-    :param simulate:    if ``False`` use ADPS methodology, else leaky-LWE
-    :param simulatessec: if True simulate ssec
-    :param k_fac:       include a multiplicative factor of (4/3)**.5 in rhs
+    :param d:               an integer dimension
+    :param simulate:        if ``False`` use ADPS methodology, else leaky-LWE
+    :param simulatessec:    if True simulate ssec
+    :param tours:           a number of tours to simulate in progressive BKZ
     :returns:           a standard deviation (not Gaussian width) sigma and the
                         beta we expect to represent maximum hardness
     """
     if simulate:
-        beta, ssec = key_recovery_beta_ssec(d)
+        beta, ssec = key_recovery_beta_ssec(d, tours=tours)
     else:
-        beta = keyRecoveryADPSstyle(d, k_fac=k_fac)
+        beta = keyRecoveryADPSstyle(d)
     if not simulate or not simulatessec:
         ssec = (rhf(beta)**(d-1.))/d**.5
     return beta, ssec
 
 
-def modelssec(drange, simulate=False, simulatessec=False):
+def modelssec(drange, simulate=False, simulatessec=False, tours=1):
     """
     Gives a model for the growth of sigma_sec as the dimension grows, via
     various levels of simulation.
@@ -180,9 +182,10 @@ def modelssec(drange, simulate=False, simulatessec=False):
     above, if simulate and simulatessec are True then we take ssec directly
     from simulation
 
-    :param drange:       the range of dimensions to compute the model over
-    :param simulate:     if True simulate beta
-    :param simulatessec: if True simulate ssec
+    :param drange:          the range of dimensions to compute the model over
+    :param simulate:        if True simulate beta
+    :param simulatessec:    if True simulate ssec
+    :param tours:           a number of tours to simulate in progressive BKZ
 
 
     ..note::    we expect a model of the shape a d^.5 + b as a sufficient
@@ -191,9 +194,11 @@ def modelssec(drange, simulate=False, simulatessec=False):
     data = []
     for d in drange:
         if simulate and simulatessec:
-            _, ssec = findBetaSsec(d, simulate=True, simulatessec=True)
+            _, ssec = findBetaSsec(d, simulate=True, simulatessec=True,
+                                   tours=tours)
         elif simulate and not simulatessec:
-            _, ssec = findBetaSsec(d, simulate=True, simulatessec=False)
+            _, ssec = findBetaSsec(d, simulate=True, simulatessec=False,
+                                   tours=tours)
         elif not simulate and not simulatessec:
             _, ssec = findBetaSsec(d, simulate=False)
         else:
