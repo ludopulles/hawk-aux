@@ -84,7 +84,7 @@ def approx_SVP_beta(d, sver, simulate=True):
             return beta
 
 
-def key_recovery_beta_ssec(d):
+def key_recovery_beta_ssec(d, tours=1):
     """
     Use the leaky-LWE-estimator to determine the expected successful blocksize
     that recovers a lattice vector of length one from some basis of ZZ^d, along
@@ -98,7 +98,7 @@ def key_recovery_beta_ssec(d):
     """
     beta, prev_sd = predict_beta_and_prev_sd(d, d*log(d)/2,  # noqa
                                              lift_union_bound=True,
-                                             number_targets=d, tours=1)
+                                             number_targets=d, tours=tours)
     # lattice was scaled up, so prev_sd need to be scaled back
     prev_sd /= sqrt(d)
     return beta, prev_sd
@@ -158,8 +158,8 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
             entries[1.] = len_sqr
             entries[0.] = d - entries[1.]
         else:
-            assert(len_sqr >= d)
-            assert(len_sqr <= d*entry_upper_bound**2)
+            assert (len_sqr >= d)
+            assert (len_sqr <= d*entry_upper_bound**2)
 
             upp = entry_upper_bound
             # solve: d_(upp-1)+d_upp=d
@@ -168,9 +168,9 @@ def fail_and_forge_probabilities(d, ssign, sver, ssec):
             dupp = floor((len_sqr - d*(upp-1)**2)/(2*upp-1))
             dupp1 = d - dupp
 
-            assert(dupp+dupp1 == d)
-            assert(dupp1*(upp-1)**2+dupp*upp**2 <= len_sqr)
-            assert(dupp1*(upp-1)**2+dupp*upp**2 > len_sqr-upp**2)
+            assert (dupp+dupp1 == d)
+            assert (dupp1*(upp-1)**2+dupp*upp**2 <= len_sqr)
+            assert (dupp1*(upp-1)**2+dupp*upp**2 > len_sqr-upp**2)
 
             entries[upp-1] = dupp1
             entries[upp] = dupp
