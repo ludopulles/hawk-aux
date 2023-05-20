@@ -198,28 +198,31 @@ def optimise_security_loss_tables(logn, lam, q_s, sig, prec):
     return a_opt, f(a_opt)
 
 
-def security_loss_cosets(n, lam, q_s, a):
+def rho(x, s):
+    # Gaussian weight at x:
+    return exp(mpf(x*x) / -2 / (s*s))
+
+
+def rho_zz(x, s, zs=100):
+    # Gaussian weight of Z + x:
+    return sum(rho(x + y, s) for y in range(-zs, zs + 1))
+
+
+def security_loss_cosets(n, lam, q_s, sig, a):
     """
     Compute security loss factor in a reduction from using uniformly random cosets to sample short
     vectors to sampling short vectors directly.
     :param n: hawk parameter
     :param lam: lambda (number of security bits)
     :param q_s: the number of allowed queries an adversary can make (2^64 for all NIST sec. levels)
+    :param sig: sigma used in signing.
     :param a: order used in the Renyi divergence.
     """
-    eps = 1.0 / sqrt(q_s*lam)
-
-    # Set up the Reverse Pinsker Inequalities to convert the Delta between sampling uniform hashes vs just short vectors (Lemma 9, HAWK-AC22):
-    delta_lemma9 = eps / (mpf('1') - eps)
-
-    ess_inf = (1 - eps) / (1 + eps) # m < 1
-    ess_sup = (1 + eps) / (1 - eps) # M > 1
-
-    # Renyi divergence for one sample where one is from first hash then short vector in lattice, and other is from "short vector in whole lattice".
-    renyi_div = mpf('1') + delta_lemma9 * ((ess_sup**a - 1)/(ess_sup-1) - (1 - ess_inf**a)/(1 - ess_inf))
-    # The renyi divergence first has to be raised to power 1/(a-1). Then, as there are q_s samples,
-    # by the product distribution rule, we may raise it to power q_s again. This combines the two.
-    renyi_div = renyi_div**(q_s / mpf(a - 1))
+    alpha = rho_zz(0, 2 * sig) / rho_zz(0,          sig) / mpf('2')
+    beta  = rho_zz(0, 2 * sig) / rho_zz(1/mpf('2'), sig) / mpf('2')
+    exponent = (2 * n / (a - 1)) * q_s
+    # RD_a = ((alpha^{a-1} + beta^{a-1}) / 2)^{2n / (a - 1)}
+    renyi_div = ((alpha**(a - 1) + beta**(a - 1)) / mpf('2'))**exponent
 
     # [Prest17] (https://tprest.github.io/pdf/pub/renyi.pdf) equation (2) says:
     # Q(E) >= P(E)^{a/(a-1)} / R_a(P || Q),
@@ -232,16 +235,15 @@ def security_loss_cosets(n, lam, q_s, a):
 
     # P(E) >= 2^-lambda implies now:
     # Q(E) >= P(E) P(E)^{1/(a-1)} / R_a(P || Q) >= P(E) / (2^{lambda/(a-1)} R_a(P || Q)).
-    return mpf('2')**(lam / (a-1)) * renyi_div
+    return mpf('2')**(lam / (a - 1)) * renyi_div
 
-
-def optimise_security_loss_cosets(logn, lam, q_s, prec):
+def optimise_security_loss_cosets(logn, lam, q_s, sig):
     alo, ahi = 2, 1 << 20
-    for it in range(50):
-        a_l = (2 * alo + ahi) / 3.0
-        a_r = (alo + 2 * ahi) / 3.0
-        loss_l = security_loss_cosets(2**logn, lam, q_s, a_l)
-        loss_r = security_loss_cosets(2**logn, lam, q_s, a_r)
+    def f(a):
+        return security_loss_cosets(2**logn, lam, q_s, sig, a)
+    for _ in range(50):
+        a_l, a_r = (2 * alo + ahi) / 3.0, (alo + 2 * ahi) / 3.0
+        loss_l, loss_r = f(a_l), f(a_r)
 
         if loss_l < loss_r:
             ahi = a_r
@@ -249,7 +251,7 @@ def optimise_security_loss_cosets(logn, lam, q_s, prec):
             alo = a_l
 
     a_opt = round((alo + ahi) / 2)
-    return a_opt, security_loss_cosets(2**logn, lam, q_s, a_opt)
+    return a_opt, f(a_opt)
 
 
 def __main__():
@@ -262,7 +264,7 @@ def __main__():
     # where you need to take logn = 9 and logn = 10 respectively.
     # HAWK-512 has a NIST-1 security level
     # HAWK-1024 has a NIST-5 security level
-    sigma_sig = { 8: '1.010', 9: '1.278', 10: '1.299' }
+    sigma_sig = { 8: mpf('1.010'), 9: mpf('1.278'), 10: mpf('1.299') }
     sigma_ver = { 8: 1.042, 9: 1.425, 10: 1.571 }
     sigma_sec = { 8: 1.042, 9: 1.425, 10: 1.974 }
 
@@ -291,7 +293,7 @@ def __main__():
 
         a_opt, loss = optimise_security_loss_tables(logn, lam, q_s, sigma_sig[logn], prec)
         print(f'Security loss (table based -> "ideal" HAWK): {nstr(loss, 10)} at order a={a_opt}')
-        a_opt, loss = optimise_security_loss_cosets(logn, lam, q_s, prec)
+        a_opt, loss = optimise_security_loss_cosets(logn, lam, q_s, sigma_sig[logn])
         print(f"Security loss (sample in uniform coset 2Z^d + h -> sample in Z^d): "
               f"{nstr(loss, 10)} at order a={a_opt}\n")
 
