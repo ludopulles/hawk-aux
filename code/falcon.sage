@@ -1,4 +1,4 @@
-from math import e, floor, log, pi, sqrt
+from sage.all import e, floor, log_gamma, log, pi, round, sqrt
 
 
 def dimensions_for_free(beta):
@@ -55,7 +55,8 @@ def falcon_blocksizes(d, falcon=False, k_fac=True):
                             without Stirling's approximation)
         """
         assert d >= 50, "the dimension must be >= 50"
-        return float((d/(2*pi*e))*(pi*d)**(1/d))
+        logRes = 2. * log_gamma(1.+d/2.)/d - log(pi)
+        return float(e**logRes)
 
     # key recovery
     for beta_key in range(50, d):
@@ -65,10 +66,11 @@ def falcon_blocksizes(d, falcon=False, k_fac=True):
         else:
             # projections of something of length 1
             lhs = sqrt(beta_key / d)
-        rhs = (beta_key/(2*pi*e))**(1 - n/beta_key) * dth_root_vol
+        # Falcon approximates as
+        # rhs = (beta_key/(2*pi*e))**(1 - n/beta_key) * dth_root_vol
         # more accurate is
-        # power = (2*beta_key - d + 1)/(2*(beta_key-1))
-        # rhs = gh_sqr(beta_key)**power * dth_root_vol
+        power = (2*beta_key - d + 1)/(2*(beta_key-1))
+        rhs = gh_sqr(beta_key)**power * dth_root_vol
         if k_fac:
             rhs *= (4/3)**.5
         if lhs <= rhs:
@@ -81,13 +83,14 @@ def falcon_blocksizes(d, falcon=False, k_fac=True):
     else:
         verif_length_sqr = d * sver**2
     for beta_forge in range(50, d):
-        lhs = (beta_forge/(2*pi*e))**(2*n/beta_forge) * q
+        # Falcon approximates as
+        # lhs = (beta_forge/(2*pi*e))**(2*n/beta_forge) * q
         # more accurate is
-        # lhs = gh_sqr(beta_forge)**((d-1)/(beta_forge-1)) * q
+        lhs = gh_sqr(beta_forge)**((d-1)/(beta_forge-1)) * q
         rhs = verif_length_sqr
         if lhs <= rhs:
             break
-    print("d, falcon, sqrt{4/3}:", d, falcon, k_fac)
+    # print("d, falcon, sqrt{4/3}:", d, falcon, k_fac)
     print("beta_key, beta_forge:", beta_key, beta_forge)
     return beta_key, beta_forge
 
@@ -116,7 +119,7 @@ def falcon_sver(n):
 
 
 # compare hawk and falcon using falcon methodology
-
+"""
 falcon_blocksizes(1024, falcon=True, k_fac=True)
 
 falcon_blocksizes(2048, falcon=True, k_fac=True)
@@ -136,3 +139,17 @@ print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
 
 beta_key, beta_forge = falcon_blocksizes(2048, falcon=False, k_fac=False)
 print(dimensions_for_free(beta_key), dimensions_for_free(beta_forge))
+"""
+
+# Hawk without simulation
+print('hawk 512')
+betaKey, betaForge = falcon_blocksizes(1024, falcon=False, k_fac=False)
+betaKeyd4f = dimensions_for_free(betaKey)
+betaForged4f = dimensions_for_free(betaForge)
+print(betaKey, betaForge, betaKeyd4f, betaForged4f)
+
+print('hawk 1024')
+betaKey, betaForge = falcon_blocksizes(2048, falcon=False, k_fac=False)
+betaKeyd4f = dimensions_for_free(betaKey)
+betaForged4f = dimensions_for_free(betaForge)
+print(betaKey, betaForge, betaKeyd4f, betaForged4f)
